@@ -60,27 +60,59 @@ class BacktestEngine:
         stats = pf.stats()
         equity = pf.value()
         returns = pf.returns()
-        trades = pf.trades.records_readable
 
         n_years = len(returns.dropna()) / self.TRADING_DAYS
+        trades = pf.trades.records_readable.copy()
 
-        print("Trade columns:", trades.columns.tolist())
+        # ---------------- TRADE SPLITS ----------------
+        winning_trades_df = trades[trades["PnL"] > 0]
+        losing_trades_df = trades[trades["PnL"] < 0]
 
+        winning_trades = len(winning_trades_df)
+        losing_trades = len(losing_trades_df)
+
+        avg_win_price = (
+            (winning_trades_df["Avg Exit Price"] - winning_trades_df["Avg Entry Price"]).mean()
+            if winning_trades > 0 else 0.0
+        )
+
+        avg_loss_price = (
+            (losing_trades_df["Avg Exit Price"] - losing_trades_df["Avg Entry Price"]).mean()
+            if losing_trades > 0 else 0.0
+        )
+
+        # ---------------- ML METRICS ----------------
+        ml_metrics = {
+            "total_return_pct": self.to_py(stats["Total Return [%]"]),
+            "cagr_pct": self.to_py(
+                ((equity.iloc[-1] / equity.iloc[0]) ** (1 / n_years) - 1) * 100
+            ),
+            "volatility_pct": self.to_py(
+                returns.std() * np.sqrt(self.TRADING_DAYS) * 100
+            ),
+            "sharpe_ratio": self.to_py(stats["Sharpe Ratio"]),
+            "max_drawdown_pct": self.to_py(abs(stats["Max Drawdown [%]"])),
+            "total_equity_value": self.to_py(equity.iloc[-1]),
+            "total_trades": int(self.to_py(stats["Total Trades"])),
+            "win_rate_pct": self.to_py(stats["Win Rate [%]"]),
+        }
+
+        # ---------------- TRADING METRICS ----------------
+        trading_metrics = {
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "profit_factor": self.to_py(stats["Profit Factor"]),
+            "avg_win_price": float(self.to_py(avg_win_price)),
+            "avg_loss_price": float(self.to_py(avg_loss_price)),
+        }
 
         return {
-            "metrics": {
-                "total_return_pct": self.to_py(stats["Total Return [%]"]),
-                "cagr_pct": self.to_py(((equity.iloc[-1] / equity.iloc[0]) ** (1 / n_years) - 1) * 100),
-                "volatility_pct": self.to_py(returns.std() * np.sqrt(self.TRADING_DAYS) * 100),
-                "sharpe_ratio": self.to_py(stats["Sharpe Ratio"]),
-                "max_drawdown_pct": self.to_py(abs(stats["Max Drawdown [%]"])),
-                "total_trades": int(self.to_py(stats["Total Trades"])),
-                "win_rate_pct": self.to_py(stats["Win Rate [%]"]),
-                "profit_factor": self.to_py(stats["Profit Factor"]),
-            },
+            "ml_metrics": ml_metrics,
+            "trading_metrics": trading_metrics,
             "equity": equity,
             "trades": trades
         }
+
 
     # ---------------- GRAPH DATA ----------------
     def build_graphs(self, market, ml):
