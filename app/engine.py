@@ -20,22 +20,28 @@ class BacktestEngine:
 
     # ---------------- MARKET ----------------
     def run_market(self):
-        returns = self.df["Close"].pct_change()
-        equity = (1 + returns).cumprod() * self.INITIAL_CAPITAL
+        returns = self.df["Close"].pct_change().dropna()
 
-        n_years = len(returns.dropna()) / self.TRADING_DAYS
+        equity = (1 + returns).cumprod()
+        equity = equity * self.INITIAL_CAPITAL
+
+        n_years = len(returns) / self.TRADING_DAYS
         drawdown = (equity - equity.cummax()) / equity.cummax()
+
+        start_equity = equity.iloc[0]
+        end_equity = equity.iloc[-1]
 
         return {
             "metrics": {
-                "total_return_pct": self.to_py((equity.iloc[-1] / equity.iloc[0] - 1) * 100),
-                "cagr_pct": self.to_py(((equity.iloc[-1] / equity.iloc[0]) ** (1 / n_years) - 1) * 100),
+                "total_return_pct": self.to_py((end_equity / start_equity - 1) * 100),
+                "cagr_pct": self.to_py(((end_equity / start_equity) ** (1 / n_years) - 1) * 100),
                 "volatility_pct": self.to_py(returns.std() * np.sqrt(self.TRADING_DAYS) * 100),
                 "sharpe_ratio": self.to_py((returns.mean() / returns.std()) * np.sqrt(self.TRADING_DAYS)),
                 "max_drawdown_pct": self.to_py(abs(drawdown.min()) * 100),
             },
             "equity": equity
         }
+
 
     # ---------------- ML STRATEGY ----------------
     def run_ml(self):
