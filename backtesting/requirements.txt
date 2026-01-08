@@ -2,6 +2,7 @@ pydantic
 fastapi
 numpy
 pandas
-vectorbt
 fastapi
 uvicorn
+requests
+vectorbt
