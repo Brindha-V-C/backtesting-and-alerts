@@ -29,21 +29,30 @@ scheduler.start()
 # 3. ML API INTEGRATION (The Input Source)
 # ==========================================
 def fetch_ml_signal(ticker: str):
-    """
-    Connects to the ML Team's API to get the latest signal.
-    """
-    print(f"🔍 [System] Connecting to ML API for {ticker}...")
+    resp = requests.post(
+        "http://127.0.0.1:8001/api/v1/ml/signal/live",
+        json={"ticker": ticker},
+        timeout=30
+    )
 
-    # Simulated Response (Replace with real API call)
-    simulated_signal = random.choice(["BUY", "SELL", "HOLD"])
-    simulated_price = round(random.uniform(100, 500), 2)
+    if resp.status_code != 200:
+        raise Exception("ML API failed")
 
-    return {
-        "ticker": ticker,
-        "signal": simulated_signal,
-        "price": simulated_price,
-        "confidence": "85%"
-    }
+    return resp.json()
+
+def fetch_backtest_result(ticker: str):
+    resp = requests.post(
+        "http://127.0.0.1:8000/api/v1/backtest/run",
+        json={"ticker": ticker},
+        timeout=120
+    )
+
+    if resp.status_code != 200:
+        raise Exception("Backtesting API failed")
+
+    return resp.json()
+
+
 
 # ==========================================
 # 4. EMAIL ALERT LOGIC (The Output)
@@ -65,7 +74,7 @@ def send_email_alert(user_email: str, ticker: str, signal_data: dict):
         Time:     {current_time}
         Ticker:   {ticker}
         Signal:   {signal_data['signal']}
-        Price:    {signal_data['price']}
+        Price:    {signal_data['current_price']}
         Confidence: {signal_data.get('confidence', 'N/A')}
         ---------------------------------
         Please check your dashboard for details.
@@ -91,24 +100,33 @@ def send_email_alert(user_email: str, ticker: str, signal_data: dict):
 # 5. THE CORE JOB (Runs at scheduled times)
 # ==========================================
 def check_and_alert_job(user_email: str, ticker: str):
-    """
-    This function runs automatically at 10:00 AM, 12:30 PM, etc.
-    """
     print(f"\n⏰ [Scheduler] Running check for {ticker} (User: {user_email})")
 
-    # 1. Get Data from ML
-    data = fetch_ml_signal(ticker)
+    try:
+        # 1️⃣ Live ML signal
+        live = fetch_ml_signal(ticker)
 
-    if not data:
-        print("⚠️ No data received from ML API.")
-        return
+        # 2️⃣ Backtesting (already includes confidence)
+        bt = fetch_backtest_result(ticker)
 
-    # 2. Check Signal
-    if data['signal'] in ["BUY", "SELL","HOLD"]:
-        print(f"🚀 Signal Detected: {data['signal']}. Sending Email...")
-        send_email_alert(user_email, ticker, data)
-    else:
-        print(f"No email sent. Error occured")
+        confidence = bt["confidence_score"]
+        ml_metrics = bt["ml_metrics"]
+        market_metrics = bt["market_metrics"]
+
+        # Attach confidence for email
+        live["confidence"] = f"{confidence:.2f}"
+
+        # 3️⃣ Send alert only if confident
+        if confidence >= 70.0 and live["signal"] in ["BUY", "SELL", "HOLD"]:
+            print(f"🚀 CONFIDENT SIGNAL ({confidence:.2f}) → Sending Email")
+            send_email_alert(user_email, ticker, live)
+        else:
+            print(
+                f"[SKIP] {ticker} | Signal={live['signal']} | Confidence={confidence:.2f}"
+            )
+
+    except Exception as e:
+        print(f"❌ Alert job failed for {ticker}: {e}")
 
 # ==========================================
 # 6. API ENDPOINTS (For Dashboard Team)
@@ -141,8 +159,8 @@ async def create_alert(request: AlertRequest):
                           id=f"{base_id}_1230pm", args=[email, ticker], replace_existing=True)
 
         # Schedule Job 3: 03:00 PM
-        scheduler.add_job(check_and_alert_job, 'cron', hour=15, minute=00,
-                          id=f"{base_id}_3pm", args=[email, ticker], replace_existing=True)
+        scheduler.add_job(check_and_alert_job, 'cron', hour=15, minute=0,
+                          id=f"{base_id}_300pm", args=[email, ticker], replace_existing=True)
 
         return {
             "status": "success",
