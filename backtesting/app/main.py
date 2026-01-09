@@ -17,33 +17,36 @@ class BacktestRequest(BaseModel):
 # -------------------------------------------------
 @app.post("/api/v1/backtest/run")
 def run_backtest(request: BacktestRequest):
-    """
-    Triggered by Dashboard → Run Backtest button
-    """
+    try:
+        ticker = request.ticker.upper()
 
-    ticker = request.ticker.upper()
+        df = load_historical_data(ticker)
 
-    # 1️⃣ Fetch historical data + ML signals
-    df = load_historical_data(ticker)
+        engine = BacktestEngine(df)
 
-    # 2️⃣ Run backtesting engine
-    engine = BacktestEngine(df)
+        market = engine.run_market()
+        ml = engine.run_ml()
 
-    market = engine.run_market()
-    ml = engine.run_ml()
+        confidence = engine.calculate_confidence(
+            ml_metrics=ml["ml_metrics"],
+            market_metrics=market["metrics"]
+        )
 
-    equity_curve, pnl_graph, trade_visual = engine.build_graphs(
-        market, ml
-    )
+        equity_curve, pnl_graph, trade_visual = engine.build_graphs(
+            market, ml
+        )
 
-    # 3️⃣ API Response
-    return {
-        "ml_metrics": ml["ml_metrics"],
-        "market_metrics": market["metrics"],
-        "trading_metrics": ml["trading_metrics"],
-        "equity_curve": equity_curve,
-        "pnl_graph": pnl_graph,
-        "trade_visualization": trade_visual
-    }
+        return {
+            "confidence_score": confidence,
+            "ml_metrics": ml["ml_metrics"],
+            "market_metrics": market["metrics"],
+            "trading_metrics": ml["trading_metrics"],
+            "equity_curve": equity_curve,
+            "pnl_graph": pnl_graph,
+            "trade_visualization": trade_visual
+        }
 
 
+    except Exception as e:
+        print("❌ BACKTEST ERROR:", e)
+        raise

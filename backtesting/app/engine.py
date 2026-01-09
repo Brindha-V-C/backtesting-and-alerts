@@ -113,6 +113,38 @@ class BacktestEngine:
             "trades": trades
         }
 
+        # ---------------- CONFIDENCE ----------------
+    @staticmethod
+    def calculate_confidence(ml_metrics, market_metrics):
+        """
+        Returns confidence score between 0 and 100
+        based on ML strategy vs Market performance."""
+        try:
+            mkt_sharpe = market_metrics["sharpe_ratio"]
+            mkt_cagr = market_metrics["cagr_pct"]
+            ml_sharpe = ml_metrics["sharpe_ratio"]
+            ml_cagr = ml_metrics["cagr_pct"]
+
+            # Safety guards
+            if mkt_sharpe <= 0 or mkt_cagr <= 0:
+                return 0.0
+
+            # Raw confidence (relative edge)
+            raw_confidence = (ml_sharpe / mkt_sharpe) * (ml_cagr / mkt_cagr)
+
+            # ---- NORMALIZATION ----
+            # raw = 1.0  → 50
+            # raw = 2.0+ → 100
+            normalized = (raw_confidence / 2.0) * 100
+
+            # Clamp between 0 and 100
+            normalized = max(0.0, min(normalized, 100.0))
+
+            return float(round(normalized, 2))
+
+        except Exception:
+             return 0.0
+
 
     # ---------------- GRAPH DATA ----------------
     def build_graphs(self, market, ml):
