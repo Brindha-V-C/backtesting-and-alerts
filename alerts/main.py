@@ -34,17 +34,7 @@ def fetch_ml_signal(ticker: str):
     """
     print(f"🔍 [System] Connecting to ML API for {ticker}...")
 
-    # --- OPTION A: REAL CONNECTION (Uncomment when ML team gives URL) ---
-    # ml_api_url = f"http://ml-team-ip:5000/predict/{ticker}"
-    # try:
-    #     response = requests.get(ml_api_url)
-    #     return response.json() # Expecting {"signal": "BUY", "price": 100}
-    # except Exception as e:
-    #     print(f"❌ ML API Error: {e}")
-    #     return None
-
-    # --- OPTION B: SIMULATION (Use this for testing now) ---
-    # We simulate a random signal so you can test if emails are working.
+    # Simulated Response (Replace with real API call)
     simulated_signal = random.choice(["BUY", "SELL", "HOLD"])
     simulated_price = round(random.uniform(100, 500), 2)
 
@@ -114,12 +104,11 @@ def check_and_alert_job(user_email: str, ticker: str):
         return
 
     # 2. Check Signal
-    # We only alert if the signal is BUY or SELL (Ignore HOLD)
     if data['signal'] in ["BUY", "SELL","HOLD"]:
         print(f"🚀 Signal Detected: {data['signal']}. Sending Email...")
         send_email_alert(user_email, ticker, data)
     else:
-        print(f"💤 Signal is HOLD. No email sent.")
+        print(f"No email sent. Error occured")
 
 # ==========================================
 # 6. API ENDPOINTS (For Dashboard Team)
